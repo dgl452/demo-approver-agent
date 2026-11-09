@@ -1,4 +1,4 @@
-# PR risk approver
+# PR Risk Approver
 
 This repository demonstrates risk-based human approval routing for pull requests. GitHub Copilot already performs the code review; this workflow does not repeat that review. It uses GitHub Copilot CLI with a dedicated custom agent to assess the change's risk and decide whether a human approval is needed.
 
