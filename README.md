@@ -34,8 +34,10 @@ node --test scripts/pr-risk-policy.test.mjs
 
 The local-only demo API lives in `services/fastapi-api`. It provides
 `GET /api/health` and in-memory CRUD routes under `/api/items`; item data is
-cleared when the process stops. It has no datastore, authentication, Azure
-services, or deployment configuration.
+cleared when the process stops. All API routes require a bearer API key set in
+the `API_KEY` environment variable. The interactive docs remain available
+without authentication. The app has no datastore, Azure services, or deployment
+configuration.
 
 Install the API and test dependencies from the repository root, then run the
 test suite:
@@ -48,7 +50,9 @@ python3 -m pytest
 Start the API locally:
 
 ```sh
+export API_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
 python3 -m uvicorn app.main:app --app-dir services/fastapi-api --host 127.0.0.1 --port 8000
 ```
 
 The interactive API docs are available at `http://127.0.0.1:8000/docs`.
+Send the key with API requests using `Authorization: Bearer <API_KEY>`.
