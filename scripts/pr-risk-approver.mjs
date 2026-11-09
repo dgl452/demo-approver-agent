@@ -160,11 +160,6 @@ async function collectPatches() {
 }
 
 function classifyWithCopilot(pullRequest, patches) {
-  const copilotToken = process.env.COPILOT_GITHUB_TOKEN;
-  if (!copilotToken) {
-    return { error: "Falta el secret COPILOT_GITHUB_TOKEN; se requiere revisión humana." };
-  }
-
   const prompt = [
     "Classify whether this pull request needs human approval.",
     "Do not perform a code review or report defects. Assess only risk, complexity, scope, and whether automation is sufficient.",
@@ -184,9 +179,13 @@ function classifyWithCopilot(pullRequest, patches) {
       encoding: "utf8",
       env: {
         ...Object.fromEntries(
-          Object.entries(process.env).filter(([name]) => name !== "GITHUB_TOKEN" && name !== "GH_TOKEN")
+          Object.entries(process.env).filter(
+            ([name]) =>
+              name !== "COPILOT_GITHUB_TOKEN" &&
+              name !== "GH_TOKEN"
+          )
         ),
-        COPILOT_GITHUB_TOKEN: copilotToken,
+        GITHUB_TOKEN: token,
       },
       maxBuffer: 1024 * 1024,
       timeout: 120_000,
@@ -199,7 +198,7 @@ function classifyWithCopilot(pullRequest, patches) {
     const authenticationFailed = /authentication failed|token may be invalid/i.test(detail);
     return {
       error: authenticationFailed
-        ? "Copilot CLI no pudo autenticarse. Verifica que COPILOT_GITHUB_TOKEN sea válido, tenga el permiso Copilot Requests y pertenezca a una cuenta con acceso a Copilot. Se requiere revisión humana."
+        ? "Copilot CLI no pudo autenticarse con GITHUB_TOKEN. Verifica que el workflow tenga copilot-requests: write y que la política de Copilot CLI permita su uso. Se requiere revisión humana."
         : "Copilot CLI no pudo clasificar la PR; se requiere revisión humana.",
     };
   }

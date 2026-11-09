@@ -13,14 +13,14 @@ This repository demonstrates risk-based human approval routing for pull requests
 
 ## Required repository setup
 
-1. Add an Actions repository secret named `COPILOT_GITHUB_TOKEN` with a fine-grained PAT that has the **Copilot Requests** permission. The token is used only by Copilot CLI. Enable the CLI policy for the organization/account if required by GitHub.
+1. The workflow uses the built-in Actions `GITHUB_TOKEN` for both GitHub API operations and Copilot CLI. Its permissions include **`copilot-requests: write`**; no PAT or `COPILOT_GITHUB_TOKEN` secret is required. Ensure the account/organization allows Copilot CLI requests from GitHub Actions. For organizations, enable **Allow use of Copilot CLI billed to the organization** in the Copilot policy settings. The token works only when the repository/account policy and Copilot entitlement permit it.
 2. Ensure each configured approver is a repository collaborator with at least read access and can review pull requests. The PR author is excluded from their own approval requirement. For example, on a PR authored by `dgl452`, `dgliria` must be a collaborator; otherwise GitHub rejects the review request and the required status remains blocked.
 3. In the default branch's ruleset/branch protection, require the commit status context **`pr-risk/approval`**. Do not require a fixed number of pull request approvals globally if low-risk PRs should merge without one; this workflow enforces one eligible approval only when needed.
 4. Require the repository's other CI checks as appropriate. Do not grant a bypass that defeats the required status check.
 
 The workflow uses `pull_request_target` so it can update status, comments, and reviewer requests for fork PRs. It checks out only the trusted default branch and never checks out or executes code from the PR. Keep the workflow, classifier, and custom agent protected by review.
 
-If Copilot CLI reports an authentication error, verify that `COPILOT_GITHUB_TOKEN` is a valid, unexpired token with **Copilot Requests** permission and that its owner has access to Copilot. The workflow passes this credential to Copilot CLI separately from the Actions `GITHUB_TOKEN`; it never prints the secret.
+If Copilot CLI reports an authentication error, verify the workflow's **`copilot-requests: write`** permission and the organization's/account's Copilot CLI policy. The built-in `GITHUB_TOKEN` is passed to the CLI; no token secret is read or logged.
 
 ## Local tests
 
