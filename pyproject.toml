@@ -1,0 +1,3 @@
+[tool.pytest.ini_options]
+testpaths = ["services/fastapi-api/tests"]
+pythonpath = ["services/fastapi-api"]

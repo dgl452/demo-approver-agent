@@ -11,6 +11,7 @@ permissions:
   issues: write
   pull-requests: write
   statuses: write
+  copilot-requests: write
 
 concurrency:
   group: pr-risk-${{ github.event.pull_request.number }}
@@ -49,7 +50,6 @@ jobs:
       - name: Classify risk and update PR
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
           GITHUB_API_URL: ${{ github.api_url }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_SERVER_URL: ${{ github.server_url }}
