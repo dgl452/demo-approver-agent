@@ -27,3 +27,26 @@ Run the policy unit tests with:
 ```sh
 node --test scripts/pr-risk-policy.test.mjs
 ```
+
+## Local FastAPI demo
+
+The local-only demo API lives in `services/fastapi-api`. It provides
+`GET /api/health` and in-memory CRUD routes under `/api/items`; item data is
+cleared when the process stops. It has no datastore, authentication, Azure
+services, or deployment configuration.
+
+Install the API and test dependencies from the repository root, then run the
+test suite:
+
+```sh
+python3 -m pip install -r requirements.txt
+python3 -m pytest
+```
+
+Start the API locally:
+
+```sh
+python3 -m uvicorn app.main:app --app-dir services/fastapi-api --host 127.0.0.1 --port 8000
+```
+
+The interactive API docs are available at `http://127.0.0.1:8000/docs`.
