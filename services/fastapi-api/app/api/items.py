@@ -2,11 +2,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Response, status
 
+from app.auth import require_api_key
 from app.models.item import Item
 from app.repositories.items import ItemsRepository
 from app.schemas.item import ItemCreate, ItemResponse
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_api_key)])
 
 
 def get_items_repository() -> ItemsRepository:
