@@ -6,6 +6,7 @@ import {
   currentApprovals,
   escapeCommentText,
   parseCopilotVerdict,
+  reviewersToRequest,
   sensitivePathReason,
 } from "./pr-risk-policy.mjs";
 
@@ -43,7 +44,11 @@ async function githubApi(path, { method = "GET", body, accept } = {}) {
   });
   const responseText = await response.text();
   if (!response.ok) {
-    throw new Error(`GitHub API ${method} ${path} failed (${response.status}): ${responseText.slice(0, 1000)}`);
+    const error = new Error(
+      `GitHub API ${method} ${path} failed (${response.status}): ${responseText.slice(0, 1000)}`
+    );
+    error.status = response.status;
+    throw error;
   }
   return responseText ? JSON.parse(responseText) : null;
 }
@@ -89,20 +94,28 @@ async function updateComment(body) {
 }
 
 async function requestReviewers(pullRequest) {
-  const author = pullRequest.user.login.toLowerCase();
-  const requested = new Set(
-    (pullRequest.requested_reviewers ?? []).map((reviewer) => reviewer.login.toLowerCase())
+  const reviewers = reviewersToRequest(
+    APPROVERS,
+    pullRequest.user.login,
+    (pullRequest.requested_reviewers ?? []).map((reviewer) => reviewer.login)
   );
-  const toRequest = APPROVERS.filter(
-    (login) => login.toLowerCase() !== author && !requested.has(login.toLowerCase())
-  );
-  if (toRequest.length) {
-    await githubApi(`/repos/${owner}/${repo}/pulls/${pullNumber}/requested_reviewers`, {
-      method: "POST",
-      body: { reviewers: toRequest },
-    });
+  const requested = [];
+  const unavailable = [];
+
+  for (const login of reviewers) {
+    try {
+      await githubApi(`/repos/${owner}/${repo}/pulls/${pullNumber}/requested_reviewers`, {
+        method: "POST",
+        body: { reviewers: [login] },
+      });
+      requested.push(login);
+    } catch (error) {
+      if (error.status !== 422) throw error;
+      console.error(`GitHub could not request reviewer ${login}: ${error.message}`);
+      unavailable.push(login);
+    }
   }
-  return APPROVERS.filter((login) => login.toLowerCase() !== author);
+  return { requested, unavailable };
 }
 
 async function cancelPendingApproverRequests(pullRequest) {
@@ -169,7 +182,12 @@ function classifyWithCopilot(pullRequest, patches) {
     ["--agent=pr-complexity", "--prompt", prompt, "--silent", "--no-ask-user"],
     {
       encoding: "utf8",
-      env: { ...process.env, COPILOT_GITHUB_TOKEN: copilotToken },
+      env: {
+        ...Object.fromEntries(
+          Object.entries(process.env).filter(([name]) => name !== "GITHUB_TOKEN" && name !== "GH_TOKEN")
+        ),
+        COPILOT_GITHUB_TOKEN: copilotToken,
+      },
       maxBuffer: 1024 * 1024,
       timeout: 120_000,
     }
@@ -178,7 +196,12 @@ function classifyWithCopilot(pullRequest, patches) {
   if (result.error || result.status !== 0) {
     const detail = result.error?.message ?? result.stderr?.trim() ?? `exit code ${result.status}`;
     console.error(`Copilot CLI classification failed: ${detail}`);
-    return { error: "Copilot CLI no pudo clasificar la PR; se requiere revisión humana." };
+    const authenticationFailed = /authentication failed|token may be invalid/i.test(detail);
+    return {
+      error: authenticationFailed
+        ? "Copilot CLI no pudo autenticarse. Verifica que COPILOT_GITHUB_TOKEN sea válido, tenga el permiso Copilot Requests y pertenezca a una cuenta con acceso a Copilot. Se requiere revisión humana."
+        : "Copilot CLI no pudo clasificar la PR; se requiere revisión humana.",
+    };
   }
 
   try {
@@ -229,7 +252,6 @@ async function main() {
     : [];
 
   if (needsHuman) {
-    const eligibleReviewers = await requestReviewers(pullRequest);
     const safeReason = escapeCommentText(reason);
     if (approvals.length) {
       await updateComment(
@@ -239,11 +261,22 @@ async function main() {
       return;
     }
 
-    const reviewerText = eligibleReviewers.length
-      ? eligibleReviewers.map((login) => `@${login}`).join(" o ")
-      : "No hay un revisor elegible distinto del autor; solicita otro aprobador.";
+    const reviewerResult = await requestReviewers(pullRequest);
+    const requestedText = reviewerResult.requested.length
+      ? `Se solicitó revisión a ${reviewerResult.requested.map((login) => `@${login}`).join(" o ")}.`
+      : "";
+    const unavailableText = reviewerResult.unavailable.length
+      ? `GitHub no permitió solicitar revisión a ${reviewerResult.unavailable.join(", ")} porque no tiene acceso de colaborador al repositorio. Añade a esa cuenta en **Settings → Collaborators** con permiso de lectura como mínimo, y vuelve a ejecutar el workflow.`
+      : "";
+    const noEligibleReviewerText =
+      !reviewerResult.requested.length && !reviewerResult.unavailable.length
+        ? "No hay un revisor elegible distinto del autor; añade otro aprobador a la lista configurada."
+        : "";
+    const reviewerText = [requestedText, unavailableText, noEligibleReviewerText]
+      .filter(Boolean)
+      .join("\n\n");
     await updateComment(
-      `### Se requiere aprobación humana\n${safeReason}\n\nSe solicitó revisión a ${reviewerText}. El merge queda bloqueado hasta que uno de ellos apruebe este commit.`
+      `### Se requiere aprobación humana\n${safeReason}\n\n${reviewerText}\n\nEl merge queda bloqueado hasta que un aprobador configurado que no sea el autor apruebe este commit.`
     );
     await updateStatus(headSha, "failure", statusDescription(true, []));
     return;

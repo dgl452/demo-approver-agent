@@ -4,6 +4,7 @@ import {
   currentApprovals,
   escapeCommentText,
   parseCopilotVerdict,
+  reviewersToRequest,
   sensitivePathReason,
 } from "./pr-risk-policy.mjs";
 
@@ -72,4 +73,15 @@ test("only an eligible approval for the current commit satisfies the gate", () =
 
 test("comment text cannot trigger mentions or inject markup", () => {
   assert.equal(escapeCommentText("@dgl452 <script>"), "&#64;dgl452 &lt;script&gt;");
+});
+
+test("review requests exclude the PR author and reviewers already requested", () => {
+  assert.deepEqual(
+    reviewersToRequest(["dgl452", "dgliria"], "DGL452", []),
+    ["dgliria"]
+  );
+  assert.deepEqual(
+    reviewersToRequest(["dgl452", "dgliria"], "someone-else", ["DGLIRIA"]),
+    ["dgl452"]
+  );
 });

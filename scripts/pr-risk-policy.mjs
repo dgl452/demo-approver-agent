@@ -1,6 +1,14 @@
 export const APPROVERS = ["dgl452", "dgliria"];
 export const STATUS_CONTEXT = "pr-risk/approval";
 
+export function reviewersToRequest(approvers, author, requestedReviewers) {
+  const authorLogin = author.toLowerCase();
+  const requested = new Set(requestedReviewers.map((login) => login.toLowerCase()));
+  return approvers.filter(
+    (login) => login.toLowerCase() !== authorLogin && !requested.has(login.toLowerCase())
+  );
+}
+
 const SENSITIVE_PATH = /(^|\/)(security|auth|authentication|authorization|crypto|cryptography|permissions?|secrets?|credentials?)([._-]|\/|$)/i;
 
 export function sensitivePathReason(path) {
