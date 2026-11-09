@@ -1,0 +1,7 @@
+/.github/workflows/ @dgl452 @dgliria
+/.github/agents/ @dgl452 @dgliria
+/CODEOWNERS @dgl452 @dgliria
+/.github/CODEOWNERS @dgl452 @dgliria
+/security/ @dgl452 @dgliria
+**/security/** @dgl452 @dgliria
+**/*auth* @dgl452 @dgliria

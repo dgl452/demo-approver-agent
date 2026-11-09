@@ -1,0 +1,70 @@
+name: PR risk and human approval
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review, edited]
+  pull_request_review:
+    types: [submitted, dismissed]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+  statuses: write
+
+concurrency:
+  group: pr-risk-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  classify-and-route:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark required status as pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${PR_HEAD_SHA}" \
+            --method POST \
+            --field state=pending \
+            --field context=pr-risk/approval \
+            --field description="Evaluating PR risk and required human approval"
+
+      - name: Check out trusted default-branch policy
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install GitHub Copilot CLI
+        continue-on-error: true
+        run: npm install --global @github/copilot
+
+      - name: Classify risk and update PR
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          GITHUB_API_URL: ${{ github.api_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_EVENT_PATH: ${{ github.event_path }}
+        run: node scripts/pr-risk-approver.mjs
+
+      - name: Mark the required status as failed if automation failed
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${PR_HEAD_SHA}" \
+            --method POST \
+            --field state=error \
+            --field context=pr-risk/approval \
+            --field description="PR risk automation failed; see this Actions run"
